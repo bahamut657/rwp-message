@@ -4,7 +4,8 @@
   "description": "reverse ws proxy message encoder and decoder",
   "main": "dist/index.js",
   "scripts": {
-    "test": "jest --verbose"
+    "test": "jest --verbose",
+    "build": "tsc"
   },
   "repository": {
     "type": "git",
