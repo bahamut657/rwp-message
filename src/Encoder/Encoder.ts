@@ -12,7 +12,7 @@ type PlainMessage = {
 
 }
 
-type EncoderCallback = (error: Error | null, message: MadMessageEncoder) => void
+type EncoderCallback = (error: Error | null, message?: EncodedMessage) => void
 
 type BufferMessage = {
     content: Buffer;
@@ -23,6 +23,13 @@ type BufferMessage = {
     zip?: MadMessageCompressionName;
 }
 
+export type EncodedMessage = {
+    isResponse: boolean;
+    length: number;
+    id: string;
+    buffer: Buffer;
+}
+
 export const ENCODER_ERRORS = {
     WRONG_MESSAGE_CONTENT: "wrong message content",
     ZIP_COMPRESS_ERROR: "zip compression failed"
@@ -31,62 +38,67 @@ export const ENCODER_ERRORS = {
 
 class MadMessageEncoder {
 
-    /** message id */
-    id?: string;
-    /** if true, build a response message */
-    isResponse: boolean
-    /** message length */
-    length: number
-    /** message requestId */
-    requestId?: string
-    /** encoded buffer */
-    buffer?: Buffer
+    // /** message id */
+    // id?: string;
+    // /** if true, build a response message */
+    // isResponse: boolean
+    // /** message length */
+    // length: number
+    // /** message requestId */
+    // requestId?: string
+    // /** encoded buffer */
+    // buffer?: Buffer
     /** debug mode */
     debug: boolean;
     /** input message */
-    input: PlainMessage;
-    /** encoder callback */
-    cb: EncoderCallback;
+    // input: PlainMessage;
+    // /** encoder callback */
+    // cb: EncoderCallback;
 
     constructor(
-        {
-            type = 'j',
-            content,
-            requestId,
-            num = 0,
-            finalize = true,
-            zip = ""
-        }: PlainMessage,
-        cb: EncoderCallback,
+        // {
+        //     type = 'j',
+        //     content,
+        //     requestId,
+        //     num = 0,
+        //     finalize = true,
+        //     zip = ""
+        // }: PlainMessage,
+        // cb: EncoderCallback,
         debug = false
     ) {
-        this.id = requestId ?? uuidv4()
-        this.input = { type, content, requestId, num, finalize, zip };
-        this.isResponse = false
-        this.length = 0
-        this.buffer;
+        //     this.id = requestId ?? uuidv4()
+        //     this.input = { type, content, requestId, num, finalize, zip };
+        //     this.isResponse = false
+        //     this.length = 0
+        //     this.buffer;
         this.debug = debug
-        this.cb = cb
-        this.build()
+        // this.cb = cb
+        // this.build()
     }
 
-    build() {
-        const { type = 'j', num = 0, content = null, finalize, requestId, zip } = this.input
-        const uid = this.requestId = requestId || uuidv4()
-        const bRequestId = ('                                    ' + uid).slice(-36)
+    build(msg: PlainMessage, cb: EncoderCallback) {
+        const { requestId = uuidv4(), type = 'j', num = 0, content = null, finalize, zip } = msg
+        const bRequestId = ('                                    ' + requestId).slice(-36)
         const bNum = ('          ' + num.toString()).slice(-10)
         const bFinalize = finalize ? '1' : '0'
         const bType = type
         if (['j', 'm'].includes(type)) {
             if (content && typeof content !== 'object') {
-                this.build_error(new Error(ENCODER_ERRORS.WRONG_MESSAGE_CONTENT));
+                this.build_error(new Error(ENCODER_ERRORS.WRONG_MESSAGE_CONTENT), cb);
                 return
             }
         }
         const bContent = ['j', 'm'].includes(type)
             ? Buffer.from(JSON.stringify(content))
             : Buffer.from(content || '')
-        this.id = uid
+        const output: EncodedMessage = {
+            id: requestId,
+            isResponse: false,
+            length: 0,
+            buffer: Buffer.from('')
+        }
+        // this.id = uid
         const bMessage: BufferMessage = {
             content: bContent,
             requestId: bRequestId,
@@ -96,18 +108,18 @@ class MadMessageEncoder {
             zip
         }
         if (!zip) {
-            this.build_uncompressed(bMessage)
+            this.build_uncompressed(bMessage, output, cb)
         } else {
-            this.build_zip(zip, bMessage)
+            this.build_zip(zip, bMessage, output, cb)
         }
     }
 
-    build_uncompressed(props: BufferMessage) {
+    build_uncompressed(props: BufferMessage, output: EncodedMessage, cb: EncoderCallback) {
         const { content, requestId, num = 0, finalize, type = 'j' } = props
         const contentLength = content.length
         const reqLength = ('                    ' + contentLength.toString()).slice(-20)
-        this.length = contentLength
-        this.buffer = Buffer.concat([
+        output.length = contentLength
+        output.buffer = Buffer.concat([
             Buffer.from(requestId),
             Buffer.from(num.toString()),
             Buffer.from(finalize),
@@ -116,10 +128,10 @@ class MadMessageEncoder {
             Buffer.from('0'),
             content
         ])
-        this.build_done()
+        this.build_done(output, cb)
     }
 
-    build_zip(zip: MadMessageCompressionName, props: BufferMessage) {
+    build_zip(zip: MadMessageCompressionName, props: BufferMessage, output: EncodedMessage, cb: EncoderCallback) {
         const { content, requestId, num = 0, finalize, type = 'j' } = props
 
         const zipCmd = this.zip_cmd(zip)
@@ -133,12 +145,12 @@ class MadMessageEncoder {
         zipCmd(content, (e, zipContent) => {
             if (e) {
                 console.log(e);
-                this.build_error(new Error(ENCODER_ERRORS.ZIP_COMPRESS_ERROR))
+                this.build_error(new Error(ENCODER_ERRORS.ZIP_COMPRESS_ERROR), cb)
             } else {
                 const zipLength = zipContent.length
                 const zipReqLength = ('                    ' + zipLength.toString()).slice(-20)
-                this.length = zipLength
-                this.buffer = Buffer.concat([
+                output.length = zipLength
+                output.buffer = Buffer.concat([
                     Buffer.from(requestId),
                     Buffer.from(num.toString()),
                     Buffer.from(finalize),
@@ -151,7 +163,7 @@ class MadMessageEncoder {
                     totalTime = Date.now() - totalTime
                     console.log(`[Encoder] ${zip} total encoding time: ${totalTime}ms`)
                 }
-                this.build_done()
+                this.build_done(output, cb)
             }
         })
     }
@@ -176,12 +188,12 @@ class MadMessageEncoder {
         }
     }
 
-    build_done() {
-        this.cb(null, this)
+    build_done(output: EncodedMessage, cb: EncoderCallback) {
+        cb(null, output)
     }
 
-    build_error(e: Error) {
-        this.cb(e, this)
+    build_error(e: Error, cb: EncoderCallback) {
+        cb(e)
     }
 }
 
