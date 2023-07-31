@@ -11,56 +11,51 @@ exports.ENCODER_ERRORS = {
     ZIP_COMPRESS_ERROR: "zip compression failed"
 };
 var MadMessageEncoder = (function () {
-    function MadMessageEncoder(_a, cb, debug) {
-        var _b = _a.type, type = _b === void 0 ? 'j' : _b, content = _a.content, requestId = _a.requestId, _c = _a.num, num = _c === void 0 ? 0 : _c, _d = _a.finalize, finalize = _d === void 0 ? true : _d, _e = _a.zip, zip = _e === void 0 ? "" : _e;
+    function MadMessageEncoder(debug) {
         if (debug === void 0) { debug = false; }
-        this.id = requestId !== null && requestId !== void 0 ? requestId : (0, uuid_1.v4)();
-        this.input = { type: type, content: content, requestId: requestId, num: num, finalize: finalize, zip: zip };
-        this.isResponse = false;
-        this.length = 0;
-        this.buffer;
         this.debug = debug;
-        this.cb = cb;
-        this.build();
     }
-    MadMessageEncoder.prototype.build = function () {
-        var _a = this.input, _b = _a.type, type = _b === void 0 ? 'j' : _b, _c = _a.num, num = _c === void 0 ? 0 : _c, _d = _a.content, content = _d === void 0 ? null : _d, finalize = _a.finalize, requestId = _a.requestId, zip = _a.zip;
-        var uid = this.requestId = requestId || (0, uuid_1.v4)();
-        var bRequestId = ('                                    ' + uid).slice(-36);
+    MadMessageEncoder.prototype.build = function (msg, cb) {
+        var _a = msg.requestId, requestId = _a === void 0 ? (0, uuid_1.v4)() : _a, _b = msg.type, type = _b === void 0 ? 'j' : _b, _c = msg.num, num = _c === void 0 ? 0 : _c, _d = msg.content, content = _d === void 0 ? null : _d, finalize = msg.finalize, zip = msg.zip;
+        var bRequestId = ('                                    ' + requestId).slice(-36);
         var bNum = ('          ' + num.toString()).slice(-10);
         var bFinalize = finalize ? '1' : '0';
-        var bType = type;
         if (['j', 'm'].includes(type)) {
             if (content && typeof content !== 'object') {
-                this.build_error(new Error(exports.ENCODER_ERRORS.WRONG_MESSAGE_CONTENT));
+                this.build_error(new Error(exports.ENCODER_ERRORS.WRONG_MESSAGE_CONTENT), cb);
                 return;
             }
         }
         var bContent = ['j', 'm'].includes(type)
             ? Buffer.from(JSON.stringify(content))
             : Buffer.from(content || '');
-        this.id = uid;
+        var output = {
+            id: requestId,
+            isResponse: false,
+            length: 0,
+            buffer: Buffer.from('')
+        };
         var bMessage = {
             content: bContent,
             requestId: bRequestId,
             num: bNum,
             finalize: bFinalize,
-            type: bType,
+            type: type,
             zip: zip
         };
         if (!zip) {
-            this.build_uncompressed(bMessage);
+            this.build_uncompressed(bMessage, output, cb);
         }
         else {
-            this.build_zip(zip, bMessage);
+            this.build_zip(zip, bMessage, output, cb);
         }
     };
-    MadMessageEncoder.prototype.build_uncompressed = function (props) {
+    MadMessageEncoder.prototype.build_uncompressed = function (props, output, cb) {
         var content = props.content, requestId = props.requestId, _a = props.num, num = _a === void 0 ? 0 : _a, finalize = props.finalize, _b = props.type, type = _b === void 0 ? 'j' : _b;
         var contentLength = content.length;
         var reqLength = ('                    ' + contentLength.toString()).slice(-20);
-        this.length = contentLength;
-        this.buffer = Buffer.concat([
+        output.length = contentLength;
+        output.buffer = Buffer.concat([
             Buffer.from(requestId),
             Buffer.from(num.toString()),
             Buffer.from(finalize),
@@ -69,9 +64,9 @@ var MadMessageEncoder = (function () {
             Buffer.from('0'),
             content
         ]);
-        this.build_done();
+        this.build_done(output, cb);
     };
-    MadMessageEncoder.prototype.build_zip = function (zip, props) {
+    MadMessageEncoder.prototype.build_zip = function (zip, props, output, cb) {
         var _this = this;
         var content = props.content, requestId = props.requestId, _a = props.num, num = _a === void 0 ? 0 : _a, finalize = props.finalize, _b = props.type, type = _b === void 0 ? 'j' : _b;
         var zipCmd = this.zip_cmd(zip);
@@ -82,13 +77,13 @@ var MadMessageEncoder = (function () {
         zipCmd(content, function (e, zipContent) {
             if (e) {
                 console.log(e);
-                _this.build_error(new Error(exports.ENCODER_ERRORS.ZIP_COMPRESS_ERROR));
+                _this.build_error(new Error(exports.ENCODER_ERRORS.ZIP_COMPRESS_ERROR), cb);
             }
             else {
                 var zipLength = zipContent.length;
                 var zipReqLength = ('                    ' + zipLength.toString()).slice(-20);
-                _this.length = zipLength;
-                _this.buffer = Buffer.concat([
+                output.length = zipLength;
+                output.buffer = Buffer.concat([
                     Buffer.from(requestId),
                     Buffer.from(num.toString()),
                     Buffer.from(finalize),
@@ -101,7 +96,7 @@ var MadMessageEncoder = (function () {
                     totalTime = Date.now() - totalTime;
                     console.log("[Encoder] ".concat(zip, " total encoding time: ").concat(totalTime, "ms"));
                 }
-                _this.build_done();
+                _this.build_done(output, cb);
             }
         });
     };
@@ -123,11 +118,11 @@ var MadMessageEncoder = (function () {
                 return node_zlib_1.default.gzip;
         }
     };
-    MadMessageEncoder.prototype.build_done = function () {
-        this.cb(null, this);
+    MadMessageEncoder.prototype.build_done = function (output, cb) {
+        cb(null, output);
     };
-    MadMessageEncoder.prototype.build_error = function (e) {
-        this.cb(e, this);
+    MadMessageEncoder.prototype.build_error = function (e, cb) {
+        cb(e);
     };
     return MadMessageEncoder;
 }());
