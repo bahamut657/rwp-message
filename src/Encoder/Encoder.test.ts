@@ -1,10 +1,5 @@
 import Encoder, { ENCODER_ERRORS, EncodedMessage } from "."
 
-const sleep = (ms: number) => {
-    return new Promise((resolve) =>
-        setTimeout(resolve, ms)
-    )
-}
 
 describe("Encoder lifecycle and props", () => {
     it("spawns an encoder", (done) => {
@@ -147,11 +142,12 @@ describe("Encoder lifecycle and props", () => {
         }, spy)
     })
 
-    /*
-    it("fails caused by failure during zip", async () => {
+
+    it("fails caused by failure during zip", (done) => {
         const spy = jest.fn((e: Error | null, encodedMessage?: EncodedMessage) => {
             expect(e !== null).toBeTruthy();
             expect(e?.message).toEqual(ENCODER_ERRORS.ZIP_COMPRESS_ERROR);
+            done()
         });
 
         const enc = new Encoder()
@@ -162,9 +158,7 @@ describe("Encoder lifecycle and props", () => {
             content: { hello: "world" },
             zip: "gzip"
         }, spy)
-        expect(spy).toHaveBeenCalledTimes(1);
-        jest.restoreAllMocks();
 
     })
-    */
+
 })

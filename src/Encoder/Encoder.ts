@@ -38,43 +38,13 @@ export const ENCODER_ERRORS = {
 
 class MadMessageEncoder {
 
-    // /** message id */
-    // id?: string;
-    // /** if true, build a response message */
-    // isResponse: boolean
-    // /** message length */
-    // length: number
-    // /** message requestId */
-    // requestId?: string
-    // /** encoded buffer */
-    // buffer?: Buffer
     /** debug mode */
     debug: boolean;
-    /** input message */
-    // input: PlainMessage;
-    // /** encoder callback */
-    // cb: EncoderCallback;
 
     constructor(
-        // {
-        //     type = 'j',
-        //     content,
-        //     requestId,
-        //     num = 0,
-        //     finalize = true,
-        //     zip = ""
-        // }: PlainMessage,
-        // cb: EncoderCallback,
         debug = false
     ) {
-        //     this.id = requestId ?? uuidv4()
-        //     this.input = { type, content, requestId, num, finalize, zip };
-        //     this.isResponse = false
-        //     this.length = 0
-        //     this.buffer;
         this.debug = debug
-        // this.cb = cb
-        // this.build()
     }
 
     build(msg: PlainMessage, cb: EncoderCallback) {
@@ -82,7 +52,6 @@ class MadMessageEncoder {
         const bRequestId = ('                                    ' + requestId).slice(-36)
         const bNum = ('          ' + num.toString()).slice(-10)
         const bFinalize = finalize ? '1' : '0'
-        const bType = type
         if (['j', 'm'].includes(type)) {
             if (content && typeof content !== 'object') {
                 this.build_error(new Error(ENCODER_ERRORS.WRONG_MESSAGE_CONTENT), cb);
@@ -98,13 +67,12 @@ class MadMessageEncoder {
             length: 0,
             buffer: Buffer.from('')
         }
-        // this.id = uid
         const bMessage: BufferMessage = {
             content: bContent,
             requestId: bRequestId,
             num: bNum,
             finalize: bFinalize,
-            type: bType,
+            type,
             zip
         }
         if (!zip) {
